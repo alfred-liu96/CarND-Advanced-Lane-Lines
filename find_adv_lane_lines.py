@@ -87,21 +87,21 @@ def edge_detection(img):
 
     # plot gradient filter with color transformation
     # plot_img = np.dstack([np.zeros_like(sobelx_img), sobelx_img, color_img]) * 255
-    plt.figure(dpi=300)
-    plt.subplot(221)
-    plt.imshow(img)
-    plt.title('Original Image')
-    plt.subplot(222)
-    plt.imshow(sobelx_img, cmap='gray')
-    plt.title('Sobel-x Image')
-    plt.subplot(223)
-    plt.imshow(color_img, cmap='gray')
-    plt.title('Color Image')
-    plt.subplot(224)
-    plt.imshow(binary_edges, cmap='gray')
-    plt.title('Binary edges of Image')
-
-    plt.savefig("output_images/binary_edges.jpg")
+    # plt.figure(dpi=300)
+    # plt.subplot(221)
+    # plt.imshow(img)
+    # plt.title('Original Image')
+    # plt.subplot(222)
+    # plt.imshow(sobelx_img, cmap='gray')
+    # plt.title('Sobel-x Image')
+    # plt.subplot(223)
+    # plt.imshow(color_img, cmap='gray')
+    # plt.title('Color Image')
+    # plt.subplot(224)
+    # plt.imshow(binary_edges, cmap='gray')
+    # plt.title('Binary edges of Image')
+    #
+    # plt.savefig("output_images/binary_edges.jpg")
 
     return binary_edges
 
@@ -130,18 +130,18 @@ class Camera(object):
         ret, self._mtx, self._dist, _, _ = cv2.calibrateCamera(obj_points, img_points, img_size[::-1], None, None)
 
         # use plt to add two images in one picture, and save it to disk
-        dist_img = image_list[0]
-        un_dist = self.correct_image(dist_img)
-        plt.figure(dpi=300)
-        plt.subplot(121)
-        plt.imshow(dist_img)
-        plt.title('Original Image')
-
-        plt.subplot(122)
-        plt.imshow(un_dist)
-        plt.title('undistorted Image')
-
-        plt.savefig("output_images/un_dist.jpg")
+        # dist_img = image_list[0]
+        # un_dist = self.correct_image(dist_img)
+        # plt.figure(dpi=300)
+        # plt.subplot(121)
+        # plt.imshow(dist_img)
+        # plt.title('Original Image')
+        #
+        # plt.subplot(122)
+        # plt.imshow(un_dist)
+        # plt.title('undistorted Image')
+        #
+        # plt.savefig("output_images/un_dist.jpg")
 
     @property
     def mtx(self):
@@ -195,28 +195,28 @@ class Perspective(object):
         self._M = cv2.getPerspectiveTransform(src, dst)
 
         # draw lines
-        line_color = [255, 0, 0]
-        thickness = 4
-        warped = self.warp_perspective(undist_img)
-
-        cv2.line(undist_img, src_ltop, src_rtop, line_color, thickness)
-        cv2.line(undist_img, src_rtop, src_lbottom, line_color, thickness)
-        cv2.line(undist_img, src_lbottom, src_rbottom, line_color, thickness)
-        cv2.line(undist_img, src_rbottom, src_ltop, line_color, thickness)
-
-        cv2.line(warped, dst_ltop, dst_rtop, line_color, thickness)
-        cv2.line(warped, dst_rtop, dst_lbottom, line_color, thickness)
-        cv2.line(warped, dst_lbottom, dst_rbottom, line_color, thickness)
-        cv2.line(warped, dst_rbottom, dst_ltop, line_color, thickness)
-
-        plt.figure(dpi=300)
-        plt.subplot(121)
-        plt.imshow(undist_img)
-        plt.title('Original Image')
-        plt.subplot(122)
-        plt.imshow(warped)
-        plt.title('Perspective Image')
-        plt.savefig("output_images/perspective_trans.jpg")
+        # line_color = [255, 0, 0]
+        # thickness = 4
+        # warped = self.warp_perspective(undist_img)
+        #
+        # cv2.line(undist_img, src_ltop, src_rtop, line_color, thickness)
+        # cv2.line(undist_img, src_rtop, src_lbottom, line_color, thickness)
+        # cv2.line(undist_img, src_lbottom, src_rbottom, line_color, thickness)
+        # cv2.line(undist_img, src_rbottom, src_ltop, line_color, thickness)
+        #
+        # cv2.line(warped, dst_ltop, dst_rtop, line_color, thickness)
+        # cv2.line(warped, dst_rtop, dst_lbottom, line_color, thickness)
+        # cv2.line(warped, dst_lbottom, dst_rbottom, line_color, thickness)
+        # cv2.line(warped, dst_rbottom, dst_ltop, line_color, thickness)
+        #
+        # plt.figure(dpi=300)
+        # plt.subplot(121)
+        # plt.imshow(undist_img)
+        # plt.title('Original Image')
+        # plt.subplot(122)
+        # plt.imshow(warped)
+        # plt.title('Perspective Image')
+        # plt.savefig("output_images/perspective_trans.jpg")
 
     @property
     def M(self):
@@ -268,19 +268,204 @@ def find_lane_line(img, camera, perspective):
     return perspective_img
 
 
+def sliding_window(img):
+    out_img = np.dstack((img, img, img)) * 255
+
+    x = img.shape[1]
+    y = img.shape[0]
+
+    histogram = np.sum(img[y // 4 * 3:, :], axis=0)
+    leftx_base = np.argmax(histogram[: x // 2])
+    rightx_base = np.argmax(histogram[x // 2:]) + x // 2
+
+    # HYPER PARAMETERS
+    # Choose the number of sliding windows
+    nwin = 9
+    # Set the width of the windows +/- margin
+    margin = 100
+    # Set minimum number of pixels found to recenter window
+    minpix = 50
+
+    # Set height of windows - based on nwin above and image shape
+    win_h = np.int(y // nwin)
+    # Identify the x and y positions of all nonzero pixels in the image
+    nonzero = img.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+
+    # Current positions to be updated later for each window in nwin
+    curr_leftx = leftx_base
+    curr_rightx = rightx_base
+    left_lane_inds = []
+    right_lane_inds = []
+
+    def slid_win_by_pixel(x_low, x_high, y_low, y_high):
+        inds = ((nonzerox >= x_low) & (nonzerox < x_high) & (nonzeroy >= y_low) & (nonzeroy < y_high)).nonzero()[0]
+        return inds
+
+    def draw_window(x_low, x_high, y_low, y_high):
+        cv2.rectangle(out_img, (x_low, y_low), (x_high, y_high), (0, 255, 0), 4)
+
+    curr_n = 0
+    while curr_n < nwin:
+        win_y_low = y - (curr_n+1) * win_h
+        win_y_high = y - curr_n * win_h
+        win_xleft_low = curr_leftx - margin
+        win_xleft_high = curr_leftx + margin
+        win_xright_low = curr_rightx - margin
+        win_xright_high = curr_rightx + margin
+
+        left_inds = slid_win_by_pixel(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
+        right_inds = slid_win_by_pixel(win_xright_low, win_xright_high, win_y_low, win_y_high)
+
+        if len(left_inds) > minpix:
+            # TODO using moving average instead of mean
+            curr_leftx = int(np.mean(nonzerox[left_inds]))
+            left_lane_inds.append(left_inds)
+            draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
+        else:
+            # slid the window left & right & not, compare which is best
+            slid_left_inds = slid_win_by_pixel(win_xleft_low - margin // 2, win_xleft_high - margin // 2, win_y_low,
+                                               win_y_high)
+            slid_right_inds = slid_win_by_pixel(win_xleft_low + margin // 2, win_xleft_high + margin // 2, win_y_low,
+                                                win_y_high)
+
+            chosen_idx = int(np.argmax([len(left_inds), len(slid_left_inds), len(slid_right_inds)]))
+            chosen_inds = (left_inds, slid_left_inds, slid_right_inds)[chosen_idx]
+            chosen_x_low, chosen_x_high = ((win_xleft_low, win_xleft_high),
+                                           (win_xleft_low - margin // 2, win_xleft_high - margin // 2),
+                                           (win_xleft_low + margin // 2, win_xleft_high + margin // 2))[chosen_idx]
+
+            # TODO using moving average instead of mean
+            if len(chosen_inds) > 0:
+                curr_leftx = int(np.mean(nonzerox[chosen_inds]))
+                left_lane_inds.append(chosen_inds)
+                draw_window(chosen_x_low, chosen_x_high, win_y_low, win_y_high)
+            else:
+                draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
+
+        if len(right_inds) > minpix:
+            # TODO using moving average instead of mean
+            curr_rightx = int(np.mean(nonzerox[right_inds]))
+            right_lane_inds.append(right_inds)
+            draw_window(win_xright_low, win_xright_high, win_y_low, win_y_high)
+        else:
+            slid_left_inds = slid_win_by_pixel(win_xright_low - margin // 2, win_xright_high - margin // 2, win_y_low,
+                                               win_y_high)
+            slid_right_inds = slid_win_by_pixel(win_xright_low + margin // 2, win_xright_high + margin // 2, win_y_low,
+                                                win_y_high)
+
+            chosen_idx = int(np.argmax([len(right_inds), len(slid_left_inds), len(slid_right_inds)]))
+            chosen_inds = (right_inds, slid_left_inds, slid_right_inds)[chosen_idx]
+            chosen_x_low, chosen_x_high = ((win_xright_low, win_xright_high),
+                                           (win_xright_low - margin // 2, win_xright_high - margin // 2),
+                                           (win_xright_low + margin // 2, win_xright_high + margin // 2))[chosen_idx]
+
+            # TODO using moving average instead of mean
+            if len(chosen_inds) > 0:
+                curr_rightx = int(np.mean(nonzerox[chosen_inds]))
+                right_lane_inds.append(chosen_inds)
+                draw_window(chosen_x_low, chosen_x_high, win_y_low, win_y_high)
+            else:
+                draw_window(win_xright_low, win_xright_high, win_y_low, win_y_high)
+
+        curr_n += 1
+
+    left_lane_inds = np.concatenate(left_lane_inds)
+    right_lane_inds = np.concatenate(right_lane_inds)
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds]
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+
+    # plot sliding windows
+    ploty = np.linspace(0, y-1, y)
+    left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
+    right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+
+    out_img[lefty, leftx] = [255, 0, 0]
+    out_img[righty, rightx] = [0, 0, 255]
+
+    plt.imshow(out_img)
+    plt.plot(left_fitx, ploty, color='yellow')
+    plt.plot(right_fitx, ploty, color='yellow')
+
+    plt.savefig("output_images/sliding_window.jpg")
+
+    return left_fit, right_fit
+
+
+def search_from_poly(left_fit, right_fit, img):
+    # TODO search from the previous polynomial
+    pass
+
+
+def calc_curvature_and_position(left_fit, right_fit, img):
+    # Define conversions in x and y from pixels space to meters
+    ym_per_pix = 30 / img.shape[0]  # meters per pixel in y dimension
+    xm_per_pix = 3.7 / img.shape[1]  # meters per pixel in x dimension
+
+    # rewrite the polynomial with the conversions
+    ori_la, ori_lb = left_fit[:-1]
+    ori_ra, ori_rb = right_fit[:-1]
+    # determine the direction
+    left_dire = 1 if ori_la > 0 else -1
+    right_dire = 1 if ori_ra > 0 else -1
+
+    left_a = xm_per_pix / (ym_per_pix ** 2) * ori_la
+    left_b = xm_per_pix / ym_per_pix * ori_lb
+    right_a = xm_per_pix / (ym_per_pix ** 2) * ori_ra
+    right_b = xm_per_pix / ym_per_pix * ori_rb
+
+    # using the bottom pixel of the image to calculate the curvature and position.
+    y_evel = (img.shape[0] - 1)
+    y_real = y_evel * ym_per_pix
+
+    left_curvature = left_dire * (1 + (2 * left_a * y_real + left_b) ** 2) ** (3 / 2) / np.absolute(2 * left_a)
+    right_curvature = right_dire * (1 + (2 * right_a * y_real + right_b) ** 2) ** (3 / 2) / np.absolute(2 * right_a)
+
+    # calculate the position
+    left_pos = np.poly1d(left_fit)(y_evel)
+    right_pos = np.poly1d(right_fit)(y_evel)
+    mid_pos = (left_pos + right_pos) / 2
+
+    position = (img.shape[1]/2 - mid_pos) * xm_per_pix
+
+    return left_curvature, right_curvature, position
+
+
 class Line(object):
     def __init__(self):
         pass
 
 
-def sliding_windows(img):
-    histogram = np.sum(img[img.shape[0] // 4:, :], axis=0)
-
-
 def predict_lane_line(img):
-    out_img = np.dstack((img, img, img)) * 255
+    # fit the lane lines using sliding window
+    left_fit, right_fit = sliding_window(img)
 
-    return 0, 0, out_img
+    # TODO add Sanity Check func
+
+    # calculate the curvature and position
+    left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
+
+    # combine left_curvature & right_curvature
+    if left_curvature * right_curvature < 0:
+        # TODO check the direction of left_curvature and right_curvature
+        curvature = 0
+    else:
+        curvature = (left_curvature + right_curvature) / 2
+    # if the curvature is too large, the lane lines are nearly straight
+    curvature = 0 if np.absolute(curvature) > 10000 else curvature
+
+    return left_fit, right_fit, curvature, position
+
+
+def drawing_lane_line_area():
+    # TODO plot result back down onto the road
+    pass
 
 
 def my_pipeline_with_img(img):
@@ -289,9 +474,9 @@ def my_pipeline_with_img(img):
     # finding lane lines
     lane_line_img = find_lane_line(img, camera, perspective)
     # predicting lane line curvature and the vehicle position
-    curvature, position, out_img = predict_lane_line(lane_line_img)
+    left_fit, right_fit, curvature, position = predict_lane_line(lane_line_img)
 
-    return curvature, position, lane_line_img
+    return curvature, position
 
 
 def my_pipeline_with_video():
@@ -302,18 +487,12 @@ def my_pipeline_with_video():
 if __name__ == '__main__':
     # testing images
     test_images = list(map(mpimg.imread, glob.glob('test_images/*.jpg')))
-    img_idx = -2
+    img_idx = 7
     # img_idx = np.random.choice(list(range(len(test_images))))
     test_img = test_images[img_idx]
-    cur, pos, result_img = my_pipeline_with_img(test_img)
+    cur, pos = my_pipeline_with_img(test_img)
+    print('The curvature is %s, vehicle position is %s.' % (cur, pos))
 
-    plt.figure(dpi=300)
-    plt.subplot(121)
-    plt.imshow(test_img)
-    plt.title('Original Image')
-    plt.subplot(122)
-    plt.imshow(result_img, cmap='gray')
-    plt.title('Processed Image')
     plt.show()
 
     # TODO testing videos
