@@ -75,7 +75,6 @@ def edge_detection(img):
 
     # try using gradient filter
     sobelx_img = gradient_magnitude_filter(gray)
-    # TODO tune the gradient-direction's params to get a better result
     grad_dire_img = gradient_direction_filter(gray)
 
     # try using Color space transformation
@@ -158,6 +157,7 @@ class Camera(object):
 class Perspective(object):
     def __init__(self):
         self._M = None
+        self._Minv = None
 
     def gen_perspective_matrix(self, camera):
         # using an image where the lane lines are straight to tune the positions
@@ -193,6 +193,7 @@ class Perspective(object):
         )
 
         self._M = cv2.getPerspectiveTransform(src, dst)
+        self._Minv = cv2.getPerspectiveTransform(dst, src)
 
         # draw lines
         # line_color = [255, 0, 0]
@@ -222,6 +223,10 @@ class Perspective(object):
     def M(self):
         return self._M
 
+    @property
+    def Minv(self):
+        return self._Minv
+
     def warp_perspective(self, img):
         if len(img.shape) > 2:
             img_size = img.shape[:-1][::-1]
@@ -231,6 +236,16 @@ class Perspective(object):
             img_size = None
 
         return cv2.warpPerspective(img, self._M, img_size, flags=cv2.INTER_LINEAR)
+
+    def reverse_warp(self, img):
+        if len(img.shape) > 2:
+            img_size = img.shape[:-1][::-1]
+        elif len(img.shape) == 2:
+            img_size = img.shape[::-1]
+        else:
+            img_size = None
+
+        return cv2.warpPerspective(img, self._Minv, img_size, flags=cv2.INTER_LINEAR)
 
 
 def pre_process():
@@ -248,18 +263,15 @@ def pre_process():
     return camera, perspective
 
 
-def find_lane_line(img, camera, perspective):
+def find_lane_line(img, perspective):
     """
     Finding lane lines in image
     :param img: original image
-    :param camera: Camera class
     :param perspective: Perspective class
     :return: a warped binary image
     """
-    # correct image
-    undist_img = camera.correct_image(img)
     # copy image
-    undist_img_backup = np.copy(undist_img)
+    undist_img_backup = np.copy(img)
     # edges detection
     edges_img = edge_detection(undist_img_backup)
     # perspective transform
@@ -304,7 +316,8 @@ def sliding_window(img):
         return inds
 
     def draw_window(x_low, x_high, y_low, y_high):
-        cv2.rectangle(out_img, (x_low, y_low), (x_high, y_high), (0, 255, 0), 4)
+        pass
+        # cv2.rectangle(out_img, (x_low, y_low), (x_high, y_high), (0, 255, 0), 4)
 
     curr_n = 0
     while curr_n < nwin:
@@ -319,7 +332,6 @@ def sliding_window(img):
         right_inds = slid_win_by_pixel(win_xright_low, win_xright_high, win_y_low, win_y_high)
 
         if len(left_inds) > minpix:
-            # TODO using moving average instead of mean
             curr_leftx = int(np.mean(nonzerox[left_inds]))
             left_lane_inds.append(left_inds)
             draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
@@ -336,7 +348,6 @@ def sliding_window(img):
                                            (win_xleft_low - margin // 2, win_xleft_high - margin // 2),
                                            (win_xleft_low + margin // 2, win_xleft_high + margin // 2))[chosen_idx]
 
-            # TODO using moving average instead of mean
             if len(chosen_inds) > 0:
                 curr_leftx = int(np.mean(nonzerox[chosen_inds]))
                 left_lane_inds.append(chosen_inds)
@@ -345,7 +356,6 @@ def sliding_window(img):
                 draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
 
         if len(right_inds) > minpix:
-            # TODO using moving average instead of mean
             curr_rightx = int(np.mean(nonzerox[right_inds]))
             right_lane_inds.append(right_inds)
             draw_window(win_xright_low, win_xright_high, win_y_low, win_y_high)
@@ -361,7 +371,6 @@ def sliding_window(img):
                                            (win_xright_low - margin // 2, win_xright_high - margin // 2),
                                            (win_xright_low + margin // 2, win_xright_high + margin // 2))[chosen_idx]
 
-            # TODO using moving average instead of mean
             if len(chosen_inds) > 0:
                 curr_rightx = int(np.mean(nonzerox[chosen_inds]))
                 right_lane_inds.append(chosen_inds)
@@ -382,23 +391,24 @@ def sliding_window(img):
     right_fit = np.polyfit(righty, rightx, 2)
 
     # plot sliding windows
-    ploty = np.linspace(0, y-1, y)
-    left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
-    right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
-
-    out_img[lefty, leftx] = [255, 0, 0]
-    out_img[righty, rightx] = [0, 0, 255]
-
-    plt.imshow(out_img)
-    plt.plot(left_fitx, ploty, color='yellow')
-    plt.plot(right_fitx, ploty, color='yellow')
-
-    plt.savefig("output_images/sliding_window.jpg")
+    # plt.figure(dpi=300)
+    # ploty = np.linspace(0, y-1, y)
+    # left_fitx = left_fit[0] * ploty ** 2 + left_fit[1] * ploty + left_fit[2]
+    # right_fitx = right_fit[0] * ploty ** 2 + right_fit[1] * ploty + right_fit[2]
+    #
+    # out_img[lefty, leftx] = [255, 0, 0]
+    # out_img[righty, rightx] = [0, 0, 255]
+    #
+    # plt.imshow(out_img)
+    # plt.plot(left_fitx, ploty, color='yellow')
+    # plt.plot(right_fitx, ploty, color='yellow')
+    #
+    # plt.savefig("output_images/sliding_window.jpg")
 
     return left_fit, right_fit
 
 
-def search_from_poly(left_fit, right_fit, img):
+def search_from_poly():
     # TODO search from the previous polynomial
     pass
 
@@ -446,14 +456,13 @@ def predict_lane_line(img):
     # fit the lane lines using sliding window
     left_fit, right_fit = sliding_window(img)
 
-    # TODO add Sanity Check func
-
     # calculate the curvature and position
     left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
 
+    # TODO add Sanity Check func, check the direction of left_curvature and right_curvature
+
     # combine left_curvature & right_curvature
     if left_curvature * right_curvature < 0:
-        # TODO check the direction of left_curvature and right_curvature
         curvature = 0
     else:
         curvature = (left_curvature + right_curvature) / 2
@@ -463,20 +472,66 @@ def predict_lane_line(img):
     return left_fit, right_fit, curvature, position
 
 
-def drawing_lane_line_area():
-    # TODO plot result back down onto the road
-    pass
+def drawing_lane_line_area(undist, warped_img, perspective, left_fit, right_fit, curvature, position):
+    y, x = undist.shape[:-1]
+
+    ploty = np.linspace(0, y-1, y)
+    left_plotx = np.poly1d(left_fit)(ploty)
+    right_plotx = np.poly1d(right_fit)(ploty)
+
+    # Create an image to draw the lines on
+    warp_zero = np.zeros_like(warped_img).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_plotx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_plotx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0, 255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix
+    new_warp = perspective.reverse_warp(color_warp)
+
+    # Combine the result with the original image
+    result = cv2.addWeighted(undist, 1, new_warp, 0.3, 0)
+
+    # Write prediction results on image
+    out_format = 'Cur: %.3f(m) %s, Pos: %.3f(m) %s'
+    if curvature < 0:
+        cur_dire = 'left'
+    elif curvature > 0:
+        cur_dire = 'right'
+    else:
+        cur_dire = 'straight'
+
+    if position > 0:
+        pos_dire = 'right'
+    elif position < 0:
+        pos_dire = 'left'
+    else:
+        pos_dire = 'straight'
+
+    out_str = out_format % (np.abs(curvature), cur_dire, np.abs(position), pos_dire)
+    cv2.putText(result, out_str, (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 2)
+
+    return result
 
 
 def my_pipeline_with_img(img):
     # get camera & perspective instance
     camera, perspective = pre_process()
+    # correct image
+    undist_img = camera.correct_image(img)
     # finding lane lines
-    lane_line_img = find_lane_line(img, camera, perspective)
+    lane_line_img = find_lane_line(undist_img, perspective)
     # predicting lane line curvature and the vehicle position
     left_fit, right_fit, curvature, position = predict_lane_line(lane_line_img)
+    # plot result back down onto the road
+    result_img = drawing_lane_line_area(undist_img, lane_line_img, perspective, left_fit, right_fit, curvature, position)
 
-    return curvature, position
+    return result_img
 
 
 def my_pipeline_with_video():
@@ -487,12 +542,12 @@ def my_pipeline_with_video():
 if __name__ == '__main__':
     # testing images
     test_images = list(map(mpimg.imread, glob.glob('test_images/*.jpg')))
-    img_idx = 7
+    img_idx = -2
     # img_idx = np.random.choice(list(range(len(test_images))))
     test_img = test_images[img_idx]
-    cur, pos = my_pipeline_with_img(test_img)
-    print('The curvature is %s, vehicle position is %s.' % (cur, pos))
+    res_img = my_pipeline_with_img(test_img)
 
+    plt.imshow(res_img)
     plt.show()
 
     # TODO testing videos
