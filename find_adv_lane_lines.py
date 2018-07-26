@@ -34,17 +34,17 @@ def gradient_magnitude_filter(img):
     sobelx_edges = np.zeros_like(scaled_sobelx)
     sobelx_edges[(scaled_sobelx >= sobel_low) & (scaled_sobelx <= sobel_high)] = 1
 
-    return sobelx_edges
+    return sobelx_edges, abs_sobelx
 
 
-def gradient_direction_filter(img):
+def gradient_direction_filter(img, abs_sobelx):
     direction_low = .7  # 0.7, 40/180 * np.pi
     direction_high = 1.3  # 1.3, 90/180 * np.pi
     sobel_size = 15
 
     # calculate gradient direction
-    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, img.shape, sobel_size)
-    abs_sobelx = np.absolute(sobelx)
+    # sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, img.shape, sobel_size)
+    # abs_sobelx = np.absolute(sobelx)
     sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, img.shape, sobel_size)
     abs_sobely = np.absolute(sobely)
     direction_gradient = np.arctan2(abs_sobely, abs_sobelx)
@@ -76,8 +76,8 @@ def edge_detection(img):
     # canny_img = canny_binary_edges(gray)
 
     # try using gradient filter
-    sobelx_img = gradient_magnitude_filter(gray)
-    grad_dire_img = gradient_direction_filter(gray)
+    sobelx_img, abs_sobelx = gradient_magnitude_filter(gray)
+    grad_dire_img = gradient_direction_filter(gray, abs_sobelx)
 
     # try using Color space transformation
     color_img = color_transform(img)
@@ -597,9 +597,11 @@ def drawing_lane_line_area(undist, warped_img, perspective, left_fit, right_fit,
     return result
 
 
+# get camera & perspective instance
+camera, perspective = pre_process()
+
+
 def my_pipeline_with_img(img):
-    # get camera & perspective instance
-    camera, perspective = pre_process()
     # correct image
     undist_img = camera.correct_image(img)
     # finding lane lines
@@ -616,6 +618,8 @@ def my_pipeline_with_video(video_fp):
     fn = os.path.basename(video_fp).split('.')[0]
     white_output = 'output_videos/%s_result.mp4' % fn
 
+    # optimize lane lines detection in video
+    # clip1 = VideoFileClip(video_fp).subclip(0, 10)
     clip1 = VideoFileClip(video_fp)
     res_clip = clip1.fl_image(my_pipeline_with_img)
     res_clip.write_videofile(white_output, audio=False)
