@@ -7,6 +7,8 @@ import cv2
 import glob
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
+from moviepy.editor import VideoFileClip
+import os.path
 
 
 def canny_binary_edges(img):
@@ -408,9 +410,34 @@ def sliding_window(img):
     return left_fit, right_fit
 
 
-def search_from_poly():
-    # TODO search from the previous polynomial
-    pass
+def search_from_poly(img):
+    # HYPER PARAMETER
+    margin = 100
+
+    nonzero = img.nonzero()
+    nonzeroy = np.array(nonzero[0])
+    nonzerox = np.array(nonzero[1])
+
+    left_p = np.poly1d(LEFT_LINE.current_fit)
+    right_p = np.poly1d(RIGHT_LINE.current_fit)
+
+    leftx_low = left_p(nonzeroy) - margin
+    leftx_high = left_p(nonzeroy) + margin
+    rightx_low = right_p(nonzeroy) - margin
+    rightx_high = right_p(nonzeroy) + margin
+
+    left_lane_inds = ((nonzerox >= leftx_low) & (nonzerox < leftx_high)).nonzero()[0]
+    right_lane_inds = ((nonzerox >= rightx_low) & (nonzerox < rightx_high)).nonzero()[0]
+
+    leftx = nonzerox[left_lane_inds]
+    lefty = nonzeroy[left_lane_inds]
+    rightx = nonzerox[right_lane_inds]
+    righty = nonzeroy[right_lane_inds]
+
+    left_fit = np.polyfit(lefty, leftx, 2)
+    right_fit = np.polyfit(righty, rightx, 2)
+
+    return left_fit, right_fit
 
 
 def calc_curvature_and_position(left_fit, right_fit, img):
@@ -447,19 +474,70 @@ def calc_curvature_and_position(left_fit, right_fit, img):
     return left_curvature, right_curvature, position
 
 
+# Define a class to receive the characteristics of each line detection
 class Line(object):
     def __init__(self):
-        pass
+        # was the line detected in the last iteration?
+        self.detected = False
+        # polynomial coefficients for the most recent fit
+        self.current_fit = []
+        # radius of curvature of the line in some units
+        self.radius_of_curvature = None
+        # distance in meters of vehicle center from the line
+        self.line_base_x = None
+
+
+# tracking left & right lane line
+LEFT_LINE = Line()
+RIGHT_LINE = Line()
+
+
+def sanity_check():
+    # TODO check the direction of left_curvature and right_curvature
+    # TODO check the bottom x and top x of left and right lane lines
+    # TODO check the base x position
+    return True
+
+
+def update_global_lines(img, left_fit, right_fit, left_curvature, right_curvature):
+    x = img.shape[1]
+    y = img.shape[0]
+
+    left_base_x = np.poly1d(left_fit)(y)
+    right_base_x = np.poly1d(right_fit)(y)
+
+    LEFT_LINE.current_fit = left_fit
+    LEFT_LINE.radius_of_curvature = left_curvature
+    LEFT_LINE.line_base_x = left_base_x
+
+    RIGHT_LINE.current_fit = right_fit
+    RIGHT_LINE.radius_of_curvature = right_curvature
+    RIGHT_LINE.line_base_x = right_base_x
 
 
 def predict_lane_line(img):
-    # fit the lane lines using sliding window
-    left_fit, right_fit = sliding_window(img)
+    for x in range(2):
+        if LEFT_LINE.detected and RIGHT_LINE.detected:
+            left_fit, right_fit = search_from_poly(img)
+        else:
+            # fit the lane lines using sliding window
+            left_fit, right_fit = sliding_window(img)
 
-    # calculate the curvature and position
-    left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
+        # calculate the curvature and position
+        left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
 
-    # TODO add Sanity Check func, check the direction of left_curvature and right_curvature
+        update_global_lines(img, left_fit, right_fit, left_curvature, right_curvature)
+
+        # Sanity Check
+        if sanity_check():
+            LEFT_LINE.detected = True
+            RIGHT_LINE.detected = True
+            break
+        else:
+            LEFT_LINE.detected = False
+            RIGHT_LINE.detected = False
+    else:
+        print('Lost tracking of the lane lines')
 
     # combine left_curvature & right_curvature
     if left_curvature * right_curvature < 0:
@@ -534,22 +612,26 @@ def my_pipeline_with_img(img):
     return result_img
 
 
-def my_pipeline_with_video():
-    # TODO deal with videos
-    pass
+def my_pipeline_with_video(video_fp):
+    fn = os.path.basename(video_fp).split('.')[0]
+    white_output = 'output_videos/%s_result.mp4' % fn
+
+    clip1 = VideoFileClip(video_fp)
+    res_clip = clip1.fl_image(my_pipeline_with_img)
+    res_clip.write_videofile(white_output, audio=False)
 
 
 if __name__ == '__main__':
     # testing images
-    test_images = list(map(mpimg.imread, glob.glob('test_images/*.jpg')))
-    img_idx = -2
-    # img_idx = np.random.choice(list(range(len(test_images))))
-    test_img = test_images[img_idx]
-    res_img = my_pipeline_with_img(test_img)
+    # test_images = list(map(mpimg.imread, glob.glob('test_images/*.jpg')))
+    # img_idx = -2
+    # # img_idx = np.random.choice(list(range(len(test_images))))
+    # test_img = test_images[img_idx]
+    # res_img = my_pipeline_with_img(test_img)
+    #
+    # plt.imshow(res_img)
+    # plt.show()
 
-    plt.imshow(res_img)
-    plt.show()
-
-    # TODO testing videos
-
-    # TODO comment all plot funcs
+    # testing videos
+    fp = 'project_video.mp4'
+    my_pipeline_with_video(fp)
