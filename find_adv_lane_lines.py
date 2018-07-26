@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from moviepy.editor import VideoFileClip
 import os.path
+from collections import deque
 
 
 def canny_binary_edges(img):
@@ -34,17 +35,17 @@ def gradient_magnitude_filter(img):
     sobelx_edges = np.zeros_like(scaled_sobelx)
     sobelx_edges[(scaled_sobelx >= sobel_low) & (scaled_sobelx <= sobel_high)] = 1
 
-    return sobelx_edges, abs_sobelx
+    return sobelx_edges
 
 
-def gradient_direction_filter(img, abs_sobelx):
+def gradient_direction_filter(img):
     direction_low = .7  # 0.7, 40/180 * np.pi
     direction_high = 1.3  # 1.3, 90/180 * np.pi
     sobel_size = 15
 
     # calculate gradient direction
-    # sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, img.shape, sobel_size)
-    # abs_sobelx = np.absolute(sobelx)
+    sobelx = cv2.Sobel(img, cv2.CV_64F, 1, 0, img.shape, sobel_size)
+    abs_sobelx = np.absolute(sobelx)
     sobely = cv2.Sobel(img, cv2.CV_64F, 0, 1, img.shape, sobel_size)
     abs_sobely = np.absolute(sobely)
     direction_gradient = np.arctan2(abs_sobely, abs_sobelx)
@@ -76,8 +77,8 @@ def edge_detection(img):
     # canny_img = canny_binary_edges(gray)
 
     # try using gradient filter
-    sobelx_img, abs_sobelx = gradient_magnitude_filter(gray)
-    grad_dire_img = gradient_direction_filter(gray, abs_sobelx)
+    sobelx_img = gradient_magnitude_filter(gray)
+    grad_dire_img = gradient_direction_filter(gray)
 
     # try using Color space transformation
     color_img = color_transform(img)
@@ -407,7 +408,7 @@ def sliding_window(img):
     #
     # plt.savefig("output_images/sliding_window.jpg")
 
-    return left_fit, right_fit
+    return left_fit, right_fit, leftx, lefty, rightx, righty
 
 
 def search_from_poly(img):
@@ -437,7 +438,7 @@ def search_from_poly(img):
     left_fit = np.polyfit(lefty, leftx, 2)
     right_fit = np.polyfit(righty, rightx, 2)
 
-    return left_fit, right_fit
+    return left_fit, right_fit, leftx, lefty, rightx, righty
 
 
 def calc_curvature_and_position(left_fit, right_fit, img):
@@ -476,69 +477,84 @@ def calc_curvature_and_position(left_fit, right_fit, img):
 
 # Define a class to receive the characteristics of each line detection
 class Line(object):
-    def __init__(self):
+    def __init__(self, last_frames):
         # was the line detected in the last iteration?
         self.detected = False
         # polynomial coefficients for the most recent fit
         self.current_fit = []
-        # radius of curvature of the line in some units
-        self.radius_of_curvature = None
-        # distance in meters of vehicle center from the line
-        self.line_base_x = None
+        # count how many frames losing the lines in a row
+        self.lost_count = 0
+        # pixels of the last n fits of the line
+        self.recent_fitx = deque(maxlen=last_frames)
+        self.recent_fity = deque(maxlen=last_frames)
 
 
 # tracking left & right lane line
-LEFT_LINE = Line()
-RIGHT_LINE = Line()
+# HYPER PARAMETER
+LAST_FRAMES = 5
+LEFT_LINE = Line(LAST_FRAMES)
+RIGHT_LINE = Line(LAST_FRAMES)
 
 
-def sanity_check():
+def sanity_check(img, left_fit, right_fit):
     # TODO check the direction of left_curvature and right_curvature
     # TODO check the bottom x and top x of left and right lane lines
     # TODO check the base x position
     return True
 
 
-def update_global_lines(img, left_fit, right_fit, left_curvature, right_curvature):
-    x = img.shape[1]
-    y = img.shape[0]
+def line_smoothing(leftx, lefty, rightx, righty):
+    LEFT_LINE.recent_fitx.append(leftx)
+    LEFT_LINE.recent_fity.append(lefty)
+    RIGHT_LINE.recent_fitx.append(rightx)
+    RIGHT_LINE.recent_fity.append(righty)
 
-    left_base_x = np.poly1d(left_fit)(y)
-    right_base_x = np.poly1d(right_fit)(y)
+    all_leftx = np.concatenate(LEFT_LINE.recent_fitx)
+    all_lefty = np.concatenate(LEFT_LINE.recent_fity)
+    all_rightx = np.concatenate(RIGHT_LINE.recent_fitx)
+    all_righty = np.concatenate(RIGHT_LINE.recent_fity)
+
+    left_fit = np.polyfit(all_lefty, all_leftx, 2)
+    right_fit = np.polyfit(all_righty, all_rightx, 2)
 
     LEFT_LINE.current_fit = left_fit
-    LEFT_LINE.radius_of_curvature = left_curvature
-    LEFT_LINE.line_base_x = left_base_x
-
     RIGHT_LINE.current_fit = right_fit
-    RIGHT_LINE.radius_of_curvature = right_curvature
-    RIGHT_LINE.line_base_x = right_base_x
+
+    return left_fit, right_fit
 
 
 def predict_lane_line(img):
-    for x in range(2):
-        if LEFT_LINE.detected and RIGHT_LINE.detected:
-            left_fit, right_fit = search_from_poly(img)
-        else:
-            # fit the lane lines using sliding window
-            left_fit, right_fit = sliding_window(img)
+    if LEFT_LINE.detected and RIGHT_LINE.detected:
+        lfit, rfit, leftx, lefty, rightx, righty = search_from_poly(img)
+    else:
+        # fit the lane lines using sliding window
+        lfit, rfit, leftx, lefty, rightx, righty = sliding_window(img)
 
-        # calculate the curvature and position
-        left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
+    # Sanity Check
+    if sanity_check(img, lfit, rfit):
+        LEFT_LINE.detected = True
+        RIGHT_LINE.detected = True
+        LEFT_LINE.lost_count = 0
+        RIGHT_LINE.lost_count = 0
 
-        update_global_lines(img, left_fit, right_fit, left_curvature, right_curvature)
+        # add lane line smoothing, recalculate left_fit & right_fit
+        left_fit, right_fit = line_smoothing(leftx, lefty, rightx, righty)
+    else:
+        left_fit, right_fit = LEFT_LINE.current_fit, RIGHT_LINE.current_fit
 
-        # Sanity Check
-        if sanity_check():
-            LEFT_LINE.detected = True
-            RIGHT_LINE.detected = True
-            break
-        else:
+        if LEFT_LINE.lost_count >= LAST_FRAMES or RIGHT_LINE.lost_count >= LAST_FRAMES:
             LEFT_LINE.detected = False
             RIGHT_LINE.detected = False
-    else:
-        print('Lost tracking of the lane lines')
+            LEFT_LINE.lost_count += 1
+            RIGHT_LINE.lost_count += 1
+        else:
+            LEFT_LINE.lost_count += 1
+            RIGHT_LINE.lost_count += 1
 
+    # ---------------- returning results ---------------- #
+
+    # calculate the curvature and position
+    left_curvature, right_curvature, position = calc_curvature_and_position(left_fit, right_fit, img)
     # combine left_curvature & right_curvature
     if left_curvature * right_curvature < 0:
         curvature = 0
