@@ -441,10 +441,14 @@ def search_from_poly(img):
     return left_fit, right_fit, leftx, lefty, rightx, righty
 
 
+REAL_LANE_LINE_HEIGHT = 30
+REAL_LANE_LINE_WIDTH = 3.7
+
+
 def calc_curvature_and_position(left_fit, right_fit, img):
     # Define conversions in x and y from pixels space to meters
-    ym_per_pix = 30 / img.shape[0]  # meters per pixel in y dimension
-    xm_per_pix = 3.7 / img.shape[1]  # meters per pixel in x dimension
+    ym_per_pix = REAL_LANE_LINE_HEIGHT / img.shape[0]  # meters per pixel in y dimension
+    xm_per_pix = REAL_LANE_LINE_WIDTH / img.shape[1]  # meters per pixel in x dimension
 
     # rewrite the polynomial with the conversions
     ori_la, ori_lb = left_fit[:-1]
@@ -495,11 +499,50 @@ LAST_FRAMES = 5
 LEFT_LINE = Line(LAST_FRAMES)
 RIGHT_LINE = Line(LAST_FRAMES)
 
+# HYPER PARAMETERS
+MAX_CURVATURE = 9000
+MAX_POSITION = 0.3
+MAX_DERIVATIVE_ERROR = 2e-1
+
 
 def sanity_check(img, left_fit, right_fit):
-    # TODO check the direction of left_curvature and right_curvature
-    # TODO check the bottom x and top x of left and right lane lines
-    # TODO check the base x position
+    x = img.shape[1]
+    y = img.shape[0]
+
+    # check the direction of left_curvature and right_curvature
+    lcur, rcur, pos = calc_curvature_and_position(left_fit, right_fit, img)
+    if lcur * rcur >= 0:
+        if np.abs(lcur) > MAX_CURVATURE and np.abs(rcur) > MAX_CURVATURE:
+            # treated as two straight lines
+            pass
+        else:
+            if np.abs(lcur - rcur) > np.abs(lcur + rcur) * .5:  # 211~859
+                return False
+    else:
+        if np.abs(lcur) < MAX_CURVATURE or np.abs(rcur) < MAX_CURVATURE:
+            return False
+    # check the vehicle position
+    if np.abs(pos) > MAX_POSITION:
+        return False
+
+    # Checking lines are separated by approximately the right distance horizontally
+    left_base_x = np.poly1d(left_fit)(y)
+    right_base_x = np.poly1d(right_fit)(y)
+    if not (0.4 * x <= (right_base_x - left_base_x) <= 0.7 * x):
+        return False
+
+    # Checking that they are roughly parallel, using top/middle/bottom y-axis value's derivative
+    y_checkpoint = [0, y/2, y]
+    left_a, left_b, _ = left_fit
+    right_a, right_b, _ = right_fit
+
+    for yc in y_checkpoint:
+        left_dx = 2 * left_a * yc + left_b
+        right_dx = 2 * right_a * yc + right_b
+
+        if np.abs(left_dx - right_dx) > MAX_DERIVATIVE_ERROR:  # np.abs(left_dx + right_dx) * .5:
+            return False
+
     return True
 
 
@@ -561,7 +604,7 @@ def predict_lane_line(img):
     else:
         curvature = (left_curvature + right_curvature) / 2
     # if the curvature is too large, the lane lines are nearly straight
-    curvature = 0 if np.absolute(curvature) > 10000 else curvature
+    curvature = 0 if np.absolute(curvature) > MAX_CURVATURE else curvature
 
     return left_fit, right_fit, curvature, position
 
