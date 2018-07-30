@@ -334,12 +334,13 @@ def sliding_window(img):
         left_inds = slid_win_by_pixel(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
         right_inds = slid_win_by_pixel(win_xright_low, win_xright_high, win_y_low, win_y_high)
 
+        # if the pixels detected is larger than minpix, choose this window
         if len(left_inds) > minpix:
             curr_leftx = int(np.mean(nonzerox[left_inds]))
             left_lane_inds.append(left_inds)
             draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
+        # slid the window left & right & not, compare which is best to choose
         else:
-            # slid the window left & right & not, compare which is best
             slid_left_inds = slid_win_by_pixel(win_xleft_low - margin // 2, win_xleft_high - margin // 2, win_y_low,
                                                win_y_high)
             slid_right_inds = slid_win_by_pixel(win_xleft_low + margin // 2, win_xleft_high + margin // 2, win_y_low,
@@ -358,6 +359,7 @@ def sliding_window(img):
             else:
                 draw_window(win_xleft_low, win_xleft_high, win_y_low, win_y_high)
 
+        # the same logic with above
         if len(right_inds) > minpix:
             curr_rightx = int(np.mean(nonzerox[right_inds]))
             right_lane_inds.append(right_inds)
