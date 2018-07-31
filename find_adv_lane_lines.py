@@ -449,8 +449,11 @@ REAL_LANE_LINE_WIDTH = 3.7
 
 def calc_curvature_and_position(left_fit, right_fit, img):
     # Define conversions in x and y from pixels space to meters
-    ym_per_pix = REAL_LANE_LINE_HEIGHT / img.shape[0]  # meters per pixel in y dimension
-    xm_per_pix = REAL_LANE_LINE_WIDTH / img.shape[1]  # meters per pixel in x dimension
+    # This two parameters should be moved into Perspective class later.
+    # meters per pixel in y dimension
+    ym_per_pix = REAL_LANE_LINE_HEIGHT / img.shape[0]
+    # meters per pixel in x dimension, 300 is the offset in the perspective transformation
+    xm_per_pix = REAL_LANE_LINE_WIDTH / (img.shape[1] - 300*2)
 
     # rewrite the polynomial with the conversions
     ori_la, ori_lb = left_fit[:-1]
@@ -502,9 +505,9 @@ LEFT_LINE = Line(LAST_FRAMES)
 RIGHT_LINE = Line(LAST_FRAMES)
 
 # HYPER PARAMETERS
-MAX_CURVATURE = 9000
-MAX_POSITION = 0.3
-MAX_DERIVATIVE_ERROR = 2e-1
+MAX_CURVATURE = 4000
+MAX_POSITION = 0.5
+MAX_DERIVATIVE_ERROR = 3e-1
 
 
 def sanity_check(img, left_fit, right_fit):
